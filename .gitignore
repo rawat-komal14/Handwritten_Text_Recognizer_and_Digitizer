@@ -1,0 +1,23 @@
+# Virtual environment
+venv/
+env/
+ENV/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Temporary images created during runtime
+temp_*.png
+temp_*.jpg
+
+# Large downloaded datasets
+data/
+
+# Trained weight files (optional: keep if under 100MB, exclude if very large)
+# resnet_emnist.pth
+
+# IDE settings
+.vscode/
+.idea/

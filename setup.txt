@@ -1,0 +1,13 @@
+python -m venv venv
+Activate on Windows:
+venv\Scripts\activate
+
+Install the primary dependencies:   
+Bashpip install numpy pandas matplotlib scikit-learn opencv-python tensorflow torch torchvision emnist streamlit
+
+Train your model:
+python train.py
+
+
+Launch the Web Interface:
+streamlit run app.py
