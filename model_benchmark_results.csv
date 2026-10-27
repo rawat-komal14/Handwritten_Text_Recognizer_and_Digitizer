@@ -1,0 +1,14 @@
+timestamp,model_name,lines_processed,cer,wer,char_accuracy_pct,word_accuracy_pct,predicted_text,ground_truth_text
+2026-10-26 21:28:25,TrOCR-Base-Handwritten,1,1.6,1.6667,0.0,0.0,a member of the House of Representatives of Representatives .,"hello, My name is Komal Rawat."
+2026-10-27 00:11:06,TrOCR-Base-Handwritten,1,0.1333,0.8333,86.67,16.67,"Hello , My name is Kamal Rawat .","hello, My name is Komal Rawat."
+2026-10-27 00:16:08,TrOCR-Base-Handwritten,1,0.0312,0.1667,96.88,83.33,I am currently pursuing BCA from,i am currently pursuing BCA from
+2026-10-27 00:23:57,TrOCR-Base-Handwritten,1,0.0833,0.25,91.67,75.0,"Graphic Era University . """,Graphic Era University .
+2026-10-27 09:10:52,TrOCR-Base-SingleLine,Single Line,0.1333,0.6667,86.67,33.33,"Hello , My name is Komal Rauvat .","Hello, My name is Komal Rawat."
+2026-10-27 19:20:16,TrOCR-Base-SingleLine,Single Line,0.1,0.8333,90.0,16.67,"Hello , My name is Kamal Rawat .","Hello, My name is Komal Rawat."
+2026-10-27 19:22:53,TrOCR-Base-SingleLine,Single Line,0.25,0.3333,75.0,66.67,I am increasingly pursuing BLA from,I am currently pursuing BCA from
+2026-10-27 19:24:29,TrOCR-Base-SingleLine,Single Line,0.1818,0.6667,81.82,33.33,"Graphic Era University . """,Graphic Era University
+2026-10-27 19:26:08,TrOCR-Base-SingleLine,Single Line,0.0625,0.1667,93.75,83.33,I am currently pursuing B.O from,I am currently pursuing BCA from
+2026-10-27 20:13:29,TrOCR-Base-SingleLine,Single Line,0.0667,0.6667,93.33,33.33,"Hello , My name is Komal Rawat .","Hello, My name is Komal Rawat."
+2026-10-27 20:21:50,TrOCR-Base-SingleLine,Single Line,0.0312,0.1667,96.88,83.33,I ami currently pursuing BCA from,I am currently pursuing BCA from
+2026-10-27 20:27:07,TrOCR-Base-SingleLine,Single Line,0.0909,0.3333,90.91,66.67,Graphic Era University .,Graphic Era University
+2026-10-27 20:31:58,TrOCR-Base-SingleLine,Single Line,0.1379,0.6667,86.21,33.33,"Hello , My name is Kamal Rawat .","Hello, My name is Komal Rawat"

@@ -1,0 +1,145 @@
+[
+    {
+        "timestamp": "2026-10-26 21:28:25",
+        "model_name": "TrOCR-Base-Handwritten",
+        "lines_processed": 1,
+        "cer": 1.6,
+        "wer": 1.6667,
+        "char_accuracy_pct": 0.0,
+        "word_accuracy_pct": 0.0,
+        "predicted_text": "a member of the House of Representatives of Representatives .",
+        "ground_truth_text": "hello, My name is Komal Rawat."
+    },
+    {
+        "timestamp": "2026-10-27 00:11:06",
+        "model_name": "TrOCR-Base-Handwritten",
+        "lines_processed": 1,
+        "cer": 0.1333,
+        "wer": 0.8333,
+        "char_accuracy_pct": 86.67,
+        "word_accuracy_pct": 16.67,
+        "predicted_text": "Hello , My name is Kamal Rawat .",
+        "ground_truth_text": "hello, My name is Komal Rawat."
+    },
+    {
+        "timestamp": "2026-10-27 00:16:08",
+        "model_name": "TrOCR-Base-Handwritten",
+        "lines_processed": 1,
+        "cer": 0.0312,
+        "wer": 0.1667,
+        "char_accuracy_pct": 96.88,
+        "word_accuracy_pct": 83.33,
+        "predicted_text": "I am currently pursuing BCA from",
+        "ground_truth_text": "i am currently pursuing BCA from"
+    },
+    {
+        "timestamp": "2026-10-27 00:23:57",
+        "model_name": "TrOCR-Base-Handwritten",
+        "lines_processed": 1,
+        "cer": 0.0833,
+        "wer": 0.25,
+        "char_accuracy_pct": 91.67,
+        "word_accuracy_pct": 75.0,
+        "predicted_text": "Graphic Era University . \"",
+        "ground_truth_text": "Graphic Era University ."
+    },
+    {
+        "timestamp": "2026-10-27 09:10:52",
+        "model_name": "TrOCR-Base-SingleLine",
+        "mode": "Single Line",
+        "cer": 0.1333,
+        "wer": 0.6667,
+        "char_accuracy_pct": 86.67,
+        "word_accuracy_pct": 33.33,
+        "predicted_text": "Hello , My name is Komal Rauvat .",
+        "ground_truth_text": "Hello, My name is Komal Rawat."
+    },
+    {
+        "timestamp": "2026-10-27 19:20:16",
+        "model_name": "TrOCR-Base-SingleLine",
+        "mode": "Single Line",
+        "cer": 0.1,
+        "wer": 0.8333,
+        "char_accuracy_pct": 90.0,
+        "word_accuracy_pct": 16.67,
+        "predicted_text": "Hello , My name is Kamal Rawat .",
+        "ground_truth_text": "Hello, My name is Komal Rawat."
+    },
+    {
+        "timestamp": "2026-10-27 19:22:53",
+        "model_name": "TrOCR-Base-SingleLine",
+        "mode": "Single Line",
+        "cer": 0.25,
+        "wer": 0.3333,
+        "char_accuracy_pct": 75.0,
+        "word_accuracy_pct": 66.67,
+        "predicted_text": "I am increasingly pursuing BLA from",
+        "ground_truth_text": "I am currently pursuing BCA from"
+    },
+    {
+        "timestamp": "2026-10-27 19:24:29",
+        "model_name": "TrOCR-Base-SingleLine",
+        "mode": "Single Line",
+        "cer": 0.1818,
+        "wer": 0.6667,
+        "char_accuracy_pct": 81.82,
+        "word_accuracy_pct": 33.33,
+        "predicted_text": "Graphic Era University . \"",
+        "ground_truth_text": "Graphic Era University"
+    },
+    {
+        "timestamp": "2026-10-27 19:26:08",
+        "model_name": "TrOCR-Base-SingleLine",
+        "mode": "Single Line",
+        "cer": 0.0625,
+        "wer": 0.1667,
+        "char_accuracy_pct": 93.75,
+        "word_accuracy_pct": 83.33,
+        "predicted_text": "I am currently pursuing B.O from",
+        "ground_truth_text": "I am currently pursuing BCA from"
+    },
+    {
+        "timestamp": "2026-10-27 20:13:29",
+        "model_name": "TrOCR-Base-SingleLine",
+        "mode": "Single Line",
+        "cer": 0.0667,
+        "wer": 0.6667,
+        "char_accuracy_pct": 93.33,
+        "word_accuracy_pct": 33.33,
+        "predicted_text": "Hello , My name is Komal Rawat .",
+        "ground_truth_text": "Hello, My name is Komal Rawat."
+    },
+    {
+        "timestamp": "2026-10-27 20:21:50",
+        "model_name": "TrOCR-Base-SingleLine",
+        "mode": "Single Line",
+        "cer": 0.0312,
+        "wer": 0.1667,
+        "char_accuracy_pct": 96.88,
+        "word_accuracy_pct": 83.33,
+        "predicted_text": "I ami currently pursuing BCA from",
+        "ground_truth_text": "I am currently pursuing BCA from"
+    },
+    {
+        "timestamp": "2026-10-27 20:27:07",
+        "model_name": "TrOCR-Base-SingleLine",
+        "mode": "Single Line",
+        "cer": 0.0909,
+        "wer": 0.3333,
+        "char_accuracy_pct": 90.91,
+        "word_accuracy_pct": 66.67,
+        "predicted_text": "Graphic Era University .",
+        "ground_truth_text": "Graphic Era University"
+    },
+    {
+        "timestamp": "2026-10-27 20:31:58",
+        "model_name": "TrOCR-Base-SingleLine",
+        "mode": "Single Line",
+        "cer": 0.1379,
+        "wer": 0.6667,
+        "char_accuracy_pct": 86.21,
+        "word_accuracy_pct": 33.33,
+        "predicted_text": "Hello , My name is Kamal Rawat .",
+        "ground_truth_text": "Hello, My name is Komal Rawat"
+    }
+]

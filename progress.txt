@@ -1,0 +1,7 @@
+                      [ Handwritten Line Input ]
+                                  │
+      ┌───────────────────────────┼───────────────────────────┐
+      ▼                           ▼                           ▼
+[ Traditional ML ]        [ Standard CNNs ]         [ Transformer / Sequence ]
+ ├─ KNN Classifier         ├─ Simple CNN             ├─ TrOCR (Already Done ✅)
+ └─ SVM Classifier         └─ ResNet-style CNN       └─ CNN + LSTM

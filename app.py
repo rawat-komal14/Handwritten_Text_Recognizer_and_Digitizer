@@ -1,79 +1,173 @@
 import streamlit as st
 import cv2
 import numpy as np
-import pytesseract
 from PIL import Image
+import json
+import os
+import pandas as pd
+from datetime import datetime
 
-# IMPORTANT: Point pytesseract to your installed Tesseract executable (Update path if installed elsewhere)
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+# Streamlit Page Config
+st.set_page_config(page_title="Handwritten Recognizer", layout="wide")
 
-def clean_notebook_lines_and_segment(image_path):
+@st.cache_resource
+def load_trocr():
     """
-    Removes horizontal ruling lines from notebook paper and isolates text lines.
+    Loads TrOCR processor and model ONCE into system RAM.
+    Deferred import prevents Streamlit dashboard startup freezing.
     """
-    img = cv2.imread(image_path)
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    import torch
+    from transformers import TrOCRProcessor, VisionEncoderDecoderModel
 
-    # 1. Binarize image (Otsu Thresholding)
-    _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    torch.set_num_threads(4)
+    processor = TrOCRProcessor.from_pretrained('microsoft/trocr-base-handwritten')
+    model = VisionEncoderDecoderModel.from_pretrained('microsoft/trocr-base-handwritten')
+    model.eval()
+    return processor, model
 
-    # 2. Detect and remove horizontal ruling lines
-    # Create horizontal kernel to detect long thin lines
-    horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (40, 1))
-    detected_lines = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, horizontal_kernel, iterations=2)
+@st.cache_resource
+def load_metrics():
+    """
+    Caches CER and WER metrics in memory.
+    """
+    import evaluate
+    cer_metric = evaluate.load("cer")
+    wer_metric = evaluate.load("wer")
+    return cer_metric, wer_metric
 
-    # Subtract horizontal rule lines from the binary text image
-    clean_binary = cv2.subtract(thresh, detected_lines)
+def clean_recognized_text(text: str) -> str:
+    cleaned = text.strip()
+    if cleaned.startswith(('"', "'", "#", "`", ",", ".")):
+        cleaned = cleaned[1:].strip()
+    return cleaned
 
-    # Invert back to black text on white paper for OCR
-    clean_ocr_input = cv2.bitwise_not(clean_binary)
-    cv2.imwrite("temp_ocr_clean.png", clean_ocr_input)
+def save_benchmark_to_file(model_name: str, cer: float, wer: float, char_acc: float, word_acc: float, pred_text: str, ref_text: str):
+    log_entry = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "model_name": model_name,
+        "mode": "Single Line",
+        "cer": round(float(cer), 4),
+        "wer": round(float(wer), 4),
+        "char_accuracy_pct": round(float(char_acc), 2),
+        "word_accuracy_pct": round(float(word_acc), 2),
+        "predicted_text": pred_text,
+        "ground_truth_text": ref_text
+    }
 
-    return clean_ocr_input, thresh
+    # 1. Update JSON Benchmark File
+    json_file = "model_benchmark_results.json"
+    data = []
+    if os.path.exists(json_file):
+        try:
+            with open(json_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = []
+            
+    data.append(log_entry)
+    with open(json_file, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4, ensure_ascii=False)
 
-st.title("Handwritten Document Text Recognizer")
-st.write("Upload a handwritten notebook page to extract digitized text.")
+    # 2. Update CSV Benchmark File
+    csv_file = "model_benchmark_results.csv"
+    df_new = pd.DataFrame([log_entry])
+    if not os.path.exists(csv_file):
+        df_new.to_csv(csv_file, index=False, encoding="utf-8")
+    else:
+        df_new.to_csv(csv_file, mode='a', header=False, index=False, encoding="utf-8")
 
-uploaded_file = st.file_uploader("Upload Image", type=["jpg", "png", "jpeg"])
+# --- Streamlit UI Header ---
+st.title("Handwritten Text Recognizer & Evaluator")
+st.write("Crop a single line of handwritten text to evaluate TrOCR model accuracy line-by-line.")
+
+uploaded_file = st.file_uploader("Upload Notebook Line Image", type=["jpg", "png", "jpeg"])
 
 if uploaded_file is not None:
-    with open("temp_input.png", "wb") as f:
-        f.write(uploaded_file.getbuffer())
+    from streamlit_cropper import st_cropper
+    
+    img = Image.open(uploaded_file).convert("RGB")
+    
+    st.subheader("1. Select & Crop Single Text Line:")
+    st.info("Drag the green cropper box directly around the single line of handwritten text you want to analyze.")
+    
+    cropped_img = st_cropper(
+        img, 
+        realtime_update=True, 
+        box_color='#00FF00', 
+        aspect_ratio=None
+    )
+    
+    crop_bgr = cv2.cvtColor(np.array(cropped_img), cv2.COLOR_RGB2BGR)
 
-    st.image(uploaded_file, caption="Uploaded Handwritten Page", use_container_width=True)
+    # CLAHE contrast enhancement
+    gray = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2GRAY)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    enhanced = clahe.apply(gray)
+    crop_rgb = cv2.cvtColor(enhanced, cv2.COLOR_GRAY2RGB)
+    line_crop_pil = Image.fromarray(crop_rgb)
 
-    if st.button("Digitize Document"):
-        with st.spinner("Removing notebook ruling lines and recognizing text..."):
-            try:
-                # 1. Clean notebook ruling lines
-                clean_img, thresh = clean_notebook_lines_and_segment("temp_input.png")
+    st.subheader("2. Line Alignment Preview:")
+    st.image(
+        line_crop_pil, 
+        caption="Selected Single Line Crop Strip (CLAHE Enhanced)", 
+        use_container_width=True
+    )
 
-                # 2. Configure Tesseract PSM 6 (Assume a single uniform block of text)
-                # --psm 6 forces Tesseract to read line-by-line from top to bottom
-                custom_config = r'--oem 3 --psm 6'
-                extracted_text = pytesseract.image_to_string(clean_img, config=custom_config)
+    st.subheader("3. Ground Truth Setup & Logging:")
+    current_model_tag = st.text_input("Model Identifier Tag:", value="TrOCR-Base-SingleLine")
+    
+    ground_truth_input = st.text_input(
+        "Ground Truth Reference Text (Exact text in image):", 
+        value="Hello, My name is Komal Rawat.",
+        placeholder="Type the exact text written in the cropped line image..."
+    )
 
-                # 3. Get line/word bounding boxes for visualization
-                data = pytesseract.image_to_data(clean_img, config=custom_config, output_type=pytesseract.Output.DICT)
+    if st.button("Digitize & Log Benchmark"):
+        with st.spinner("Processing single line through cached TrOCR model..."):
+            import torch
+            
+            processor, model = load_trocr()
+
+            with torch.inference_mode():
+                pixel_values = processor(images=line_crop_pil, return_tensors="pt").pixel_values
                 
-                vis_img = cv2.imread("temp_input.png")
-                n_boxes = len(data['text'])
+                generated_ids = model.generate(
+                    pixel_values, 
+                    max_new_tokens=35, 
+                    num_beams=1
+                )
                 
-                for i in range(n_boxes):
-                    if int(data['conf'][i]) > 15 and data['text'][i].strip() != '':
-                        (x, y, w, h) = (data['left'][i], data['top'][i], data['width'][i], data['height'][i])
-                        cv2.rectangle(vis_img, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                raw_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+                reconstructed_text = clean_recognized_text(raw_text)
 
-                # 4. Display Results
-                st.subheader("Digitized Text Output:")
-                if extracted_text.strip():
-                    st.code(extracted_text, language="text")
-                else:
-                    st.warning("No text could be extracted. Please check if Tesseract path is set correctly.")
+            st.subheader("Digitized Output Text:")
+            st.code(reconstructed_text, language="text")
 
-                st.subheader("Detected Text Regions:")
-                st.image(vis_img, caption="Line-by-Line Bounding Box Extraction", use_container_width=True)
+            # Save Metrics Routine
+            if ground_truth_input.strip():
+                try:
+                    cer_metric, wer_metric = load_metrics()
 
-            except Exception as e:
-                st.error(f"Error executing OCR: {e}")
-                st.info("Ensure Tesseract-OCR is installed on your PC and the path in `pytesseract.tesseract_cmd` is correct.")
+                    ref_str = ground_truth_input.strip()
+                    pred_str = reconstructed_text.strip()
+
+                    cer_score = cer_metric.compute(predictions=[pred_str], references=[ref_str])
+                    wer_score = wer_metric.compute(predictions=[pred_str], references=[ref_str])
+                    
+                    char_accuracy = max(0.0, (1.0 - cer_score) * 100)
+                    word_accuracy = max(0.0, (1.0 - wer_score) * 100)
+
+                    save_benchmark_to_file(
+                        model_name=current_model_tag,
+                        cer=cer_score,
+                        wer=wer_score,
+                        char_acc=char_accuracy,
+                        word_acc=word_accuracy,
+                        pred_text=pred_str,
+                        ref_text=ref_str
+                    )
+                    st.success("Line digitized and metrics logged to `model_benchmark_results.json` and `.csv`!")
+                except Exception as e:
+                    st.error(f"Failed to log metrics: {e}")
+            else:
+                st.warning("Please enter the Ground Truth Reference Text above to log CER/WER metrics.")
