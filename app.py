@@ -7,54 +7,46 @@ import os
 import pandas as pd
 from datetime import datetime
 
-# Streamlit Page Config
-st.set_page_config(page_title="Handwritten Recognizer", layout="wide")
+st.set_page_config(page_title="Handwritten Text Recognizer & Digitizer", layout="wide")
 
 @st.cache_resource
 def load_trocr():
-    """
-    Loads TrOCR processor and model ONCE into system RAM.
-    Deferred import prevents Streamlit dashboard startup freezing.
-    """
-    import torch
     from transformers import TrOCRProcessor, VisionEncoderDecoderModel
-
-    torch.set_num_threads(4)
     processor = TrOCRProcessor.from_pretrained('microsoft/trocr-base-handwritten')
     model = VisionEncoderDecoderModel.from_pretrained('microsoft/trocr-base-handwritten')
     model.eval()
     return processor, model
 
 @st.cache_resource
+def load_simple_cnn():
+    import torch
+    from models.cnn_models import SimpleCNN
+    model = SimpleCNN(num_classes=62)
+    weights_path = "simple_cnn_emnist.pth"
+    if os.path.exists(weights_path):
+        model.load_state_dict(torch.load(weights_path, map_location=torch.device('cpu')))
+    model.eval()
+    return model
+
+@st.cache_resource
+def load_residual_cnn():
+    import torch
+    from models.cnn_models import ResidualCNN
+    model = ResidualCNN(num_classes=62)
+    weights_path = "resnet_emnist.pth"
+    if os.path.exists(weights_path):
+        model.load_state_dict(torch.load(weights_path, map_location=torch.device('cpu')))
+    model.eval()
+    return model
+
+@st.cache_resource
 def load_metrics():
-    """
-    Caches CER and WER metrics in memory.
-    """
     import evaluate
     cer_metric = evaluate.load("cer")
     wer_metric = evaluate.load("wer")
     return cer_metric, wer_metric
 
-def clean_recognized_text(text: str) -> str:
-    cleaned = text.strip()
-    if cleaned.startswith(('"', "'", "#", "`", ",", ".")):
-        cleaned = cleaned[1:].strip()
-    return cleaned
-
-def save_benchmark_to_file(model_name: str, cer: float, wer: float, char_acc: float, word_acc: float, pred_text: str, ref_text: str):
-    log_entry = {
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "model_name": model_name,
-        "mode": "Single Line",
-        "cer": round(float(cer), 4),
-        "wer": round(float(wer), 4),
-        "char_accuracy_pct": round(float(char_acc), 2),
-        "word_accuracy_pct": round(float(word_acc), 2),
-        "predicted_text": pred_text,
-        "ground_truth_text": ref_text
-    }
-
-    # 1. Update JSON Benchmark File
+def save_benchmark_log(log_entries):
     json_file = "model_benchmark_results.json"
     data = []
     if os.path.exists(json_file):
@@ -64,110 +56,152 @@ def save_benchmark_to_file(model_name: str, cer: float, wer: float, char_acc: fl
         except Exception:
             data = []
             
-    data.append(log_entry)
+    data.extend(log_entries)
     with open(json_file, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
 
-    # 2. Update CSV Benchmark File
     csv_file = "model_benchmark_results.csv"
-    df_new = pd.DataFrame([log_entry])
+    df_new = pd.DataFrame(log_entries)
     if not os.path.exists(csv_file):
         df_new.to_csv(csv_file, index=False, encoding="utf-8")
     else:
         df_new.to_csv(csv_file, mode='a', header=False, index=False, encoding="utf-8")
 
-# --- Streamlit UI Header ---
-st.title("Handwritten Text Recognizer & Evaluator")
-st.write("Crop a single line of handwritten text to evaluate TrOCR model accuracy line-by-line.")
+def recognize_characters_emnist(line_crop_bgr, model):
+    import torch
+    from torchvision import transforms
+    from emnist_mapping import map_label
 
-uploaded_file = st.file_uploader("Upload Notebook Line Image", type=["jpg", "png", "jpeg"])
+    gray = cv2.cvtColor(line_crop_bgr, cv2.COLOR_BGR2GRAY)
+    _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    char_boxes = []
+    h_img, w_img = thresh.shape
+
+    for cnt in contours:
+        x, y, w, h = cv2.boundingRect(cnt)
+        if w < w_img * 0.4 and h < h_img * 0.8 and w >= 5 and h >= 12:
+            char_boxes.append((x, y, w, h))
+
+    if not char_boxes:
+        return ""
+
+    char_boxes = sorted(char_boxes, key=lambda b: b[0])
+
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,))
+    ])
+
+    recognized_chars = []
+    with torch.inference_mode():
+        for x, y, w, h in char_boxes:
+            pad = 2
+            x1, y1 = max(0, x - pad), max(0, y - pad)
+            x2, y2 = min(w_img, x + w + pad), min(h_img, y + h + pad)
+            char_crop = thresh[y1:y2, x1:x2]
+
+            char_resized = cv2.resize(char_crop, (28, 28), interpolation=cv2.INTER_AREA)
+            char_transposed = np.transpose(char_resized, (1, 0))
+
+            tensor_img = transform(char_transposed).unsqueeze(0)
+            output = model(tensor_img)
+            pred_idx = torch.argmax(output, dim=1).item()
+            pred_char = map_label(pred_idx)
+            recognized_chars.append(pred_char)
+
+    return "".join(recognized_chars)
+
+
+# --- UI Setup ---
+st.title("Handwritten Text Recognizer and Digitizer")
+st.write("Fast real-time handwritten line digitization engine.")
+
+uploaded_file = st.file_uploader("Upload Sample Image", type=["jpg", "png", "jpeg"])
 
 if uploaded_file is not None:
     from streamlit_cropper import st_cropper
     
     img = Image.open(uploaded_file).convert("RGB")
     
-    st.subheader("1. Select & Crop Single Text Line:")
-    st.info("Drag the green cropper box directly around the single line of handwritten text you want to analyze.")
-    
-    cropped_img = st_cropper(
-        img, 
-        realtime_update=True, 
-        box_color='#00FF00', 
-        aspect_ratio=None
-    )
-    
+    st.subheader("1. Crop Line Region:")
+    cropped_img = st_cropper(img, realtime_update=True, box_color='#00FF00', aspect_ratio=None)
     crop_bgr = cv2.cvtColor(np.array(cropped_img), cv2.COLOR_RGB2BGR)
 
-    # CLAHE contrast enhancement
-    gray = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2GRAY)
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    enhanced = clahe.apply(gray)
-    crop_rgb = cv2.cvtColor(enhanced, cv2.COLOR_GRAY2RGB)
-    line_crop_pil = Image.fromarray(crop_rgb)
+    st.subheader("2. Settings:")
+    run_full_benchmark = st.checkbox("Run full multi-model background benchmark (Simple CNN & ResNet)", value=False)
+    ground_truth_input = st.text_input("Ground Truth Reference Text (Optional for accuracy logging):", value="Hello World")
 
-    st.subheader("2. Line Alignment Preview:")
-    st.image(
-        line_crop_pil, 
-        caption="Selected Single Line Crop Strip (CLAHE Enhanced)", 
-        use_container_width=True
-    )
-
-    st.subheader("3. Ground Truth Setup & Logging:")
-    current_model_tag = st.text_input("Model Identifier Tag:", value="TrOCR-Base-SingleLine")
-    
-    ground_truth_input = st.text_input(
-        "Ground Truth Reference Text (Exact text in image):", 
-        value="Hello, My name is Komal Rawat.",
-        placeholder="Type the exact text written in the cropped line image..."
-    )
-
-    if st.button("Digitize & Log Benchmark"):
-        with st.spinner("Processing single line through cached TrOCR model..."):
+    if st.button("Digitize Text"):
+        with st.spinner("Digitizing..."):
             import torch
-            
-            processor, model = load_trocr()
+
+            # Fast TrOCR Inference
+            line_crop_pil = Image.fromarray(cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2RGB))
+            processor, trocr_model = load_trocr()
 
             with torch.inference_mode():
                 pixel_values = processor(images=line_crop_pil, return_tensors="pt").pixel_values
-                
-                generated_ids = model.generate(
-                    pixel_values, 
-                    max_new_tokens=35, 
-                    num_beams=1
-                )
-                
-                raw_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
-                reconstructed_text = clean_recognized_text(raw_text)
+                generated_ids = trocr_model.generate(pixel_values, max_new_tokens=30, num_beams=1)
+                raw_trocr = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+                digitized_text = raw_trocr.strip()
 
             st.subheader("Digitized Output Text:")
-            st.code(reconstructed_text, language="text")
+            st.code(digitized_text, language="text")
 
-            # Save Metrics Routine
-            if ground_truth_input.strip():
+            # Background Logging only if enabled or ground truth present
+            if run_full_benchmark and ground_truth_input.strip():
                 try:
                     cer_metric, wer_metric = load_metrics()
-
                     ref_str = ground_truth_input.strip()
-                    pred_str = reconstructed_text.strip()
+                    timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-                    cer_score = cer_metric.compute(predictions=[pred_str], references=[ref_str])
-                    wer_score = wer_metric.compute(predictions=[pred_str], references=[ref_str])
-                    
-                    char_accuracy = max(0.0, (1.0 - cer_score) * 100)
-                    word_accuracy = max(0.0, (1.0 - wer_score) * 100)
+                    cer_trocr = cer_metric.compute(predictions=[digitized_text], references=[ref_str])
+                    wer_trocr = wer_metric.compute(predictions=[digitized_text], references=[ref_str])
 
-                    save_benchmark_to_file(
-                        model_name=current_model_tag,
-                        cer=cer_score,
-                        wer=wer_score,
-                        char_acc=char_accuracy,
-                        word_acc=word_accuracy,
-                        pred_text=pred_str,
-                        ref_text=ref_str
-                    )
-                    st.success("Line digitized and metrics logged to `model_benchmark_results.json` and `.csv`!")
+                    simple_model = load_simple_cnn()
+                    text_simple = recognize_characters_emnist(crop_bgr, simple_model)
+                    cer_simple = cer_metric.compute(predictions=[text_simple if text_simple else " "], references=[ref_str])
+                    wer_simple = wer_metric.compute(predictions=[text_simple if text_simple else " "], references=[ref_str])
+
+                    resnet_model = load_residual_cnn()
+                    text_resnet = recognize_characters_emnist(crop_bgr, resnet_model)
+                    cer_resnet = cer_metric.compute(predictions=[text_resnet if text_resnet else " "], references=[ref_str])
+                    wer_resnet = wer_metric.compute(predictions=[text_resnet if text_resnet else " "], references=[ref_str])
+
+                    log_entries = [
+                        {
+                            "timestamp": timestamp_str,
+                            "model_name": "Simple CNN (EMNIST Baseline)",
+                            "cer": round(float(cer_simple), 4),
+                            "wer": round(float(wer_simple), 4),
+                            "char_accuracy_pct": round(max(0.0, (1.0 - cer_simple) * 100), 2),
+                            "predicted_text": text_simple if text_simple else "[No Chars Detected]",
+                            "ground_truth_text": ref_str
+                        },
+                        {
+                            "timestamp": timestamp_str,
+                            "model_name": "Residual CNN (EMNIST Architecture)",
+                            "cer": round(float(cer_resnet), 4),
+                            "wer": round(float(wer_resnet), 4),
+                            "char_accuracy_pct": round(max(0.0, (1.0 - cer_resnet) * 100), 2),
+                            "predicted_text": text_resnet if text_resnet else "[No Chars Detected]",
+                            "ground_truth_text": ref_str
+                        },
+                        {
+                            "timestamp": timestamp_str,
+                            "model_name": "TrOCR (Vision Transformer)",
+                            "cer": round(float(cer_trocr), 4),
+                            "wer": round(float(wer_trocr), 4),
+                            "char_accuracy_pct": round(max(0.0, (1.0 - cer_trocr) * 100), 2),
+                            "predicted_text": digitized_text,
+                            "ground_truth_text": ref_str
+                        }
+                    ]
+
+                    save_benchmark_log(log_entries)
+                    st.success("Benchmark metrics logged to `model_benchmark_results.csv`!")
                 except Exception as e:
-                    st.error(f"Failed to log metrics: {e}")
-            else:
-                st.warning("Please enter the Ground Truth Reference Text above to log CER/WER metrics.")
+                    st.warning(f"Failed logging metrics: {e}")
